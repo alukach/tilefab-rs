@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use worker as cf;
+pub mod bounds;
 pub mod tile;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -22,7 +23,7 @@ pub async fn handle_get(_: cf::Request, _ctx: cf::RouteContext<()>) -> cf::Resul
     })
 }
 
-pub async fn handle_tile(req: cf::Request, ctx: cf::RouteContext<()>) -> cf::Result<cf::Response> {
+pub async fn handle_tile(_: cf::Request, ctx: cf::RouteContext<()>) -> cf::Result<cf::Response> {
     let tile = match tile::Tile::from(
         ctx.param("z").unwrap_or(&String::from("")),
         ctx.param("x").unwrap_or(&String::from("")),
@@ -33,5 +34,5 @@ pub async fn handle_tile(req: cf::Request, ctx: cf::RouteContext<()>) -> cf::Res
     };
 
     // do lots of other things with tile...
-    cf::Response::from_json(&tile.as_bounds())
+    cf::Response::from_json(&bounds::Bounds::from(tile))
 }
