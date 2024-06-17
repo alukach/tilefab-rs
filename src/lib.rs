@@ -36,8 +36,11 @@ pub async fn get_tile(req: cf::Request, ctx: cf::RouteContext<()>) -> cf::Result
     };
 
     // Retrieve src query parameter
-    let q: HashMap<_, _> = req.url().unwrap().query_pairs().into_owned().collect();
-    let src = match q.get("src") {
+    let query_params: HashMap<String, String> = match req.url() {
+        Ok(url) => url.query_pairs().into_owned().collect(),
+        Err(_) => return cf::Response::error("Failed to parse URL", 400),
+    };
+    let src = match query_params.get("src") {
         Some(src) => src,
         None => return cf::Response::error("src query parameter is required", 400),
     };
