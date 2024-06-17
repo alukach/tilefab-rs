@@ -1,12 +1,17 @@
 name: Deploy Worker
+
 on:
   push:
     branches:
       - main
+
 jobs:
   deploy:
     environment: 
       name: Production
+    concurrency:
+      group: production
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
