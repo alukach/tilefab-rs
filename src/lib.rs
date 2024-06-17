@@ -33,5 +33,5 @@ pub async fn handle_tile(req: cf::Request, ctx: cf::RouteContext<()>) -> cf::Res
     };
 
     // do lots of other things with tile...
-    cf::Response::ok(format!("{:?}", tile.as_bounds()))
+    cf::Response::from_json(&tile.as_bounds())
 }

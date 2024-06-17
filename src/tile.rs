@@ -1,6 +1,7 @@
+use serde::{Deserialize, Serialize};
 use std::f64::consts::PI;
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Bounds {
     x_min: f64,
     x_max: f64,
