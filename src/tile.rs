@@ -7,7 +7,7 @@ pub struct Tile {
     pub z: u32,
 }
 impl Tile {
-    pub fn from(z: &String, x: &String, y: &String) -> Result<Self, String> {
+    pub fn new(z: &String, x: &String, y: &String) -> Result<Self, String> {
         // Parse path & validate type
         let z = z.parse().map_err(|_| "Invalid z value".to_string())?;
         let x = x.parse().map_err(|_| "Invalid x value".to_string())?;

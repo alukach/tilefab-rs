@@ -28,7 +28,7 @@ pub async fn hello(_: cf::Request, _ctx: cf::RouteContext<()>) -> cf::Result<cf:
 
 pub async fn get_tile(req: cf::Request, ctx: cf::RouteContext<()>) -> cf::Result<cf::Response> {
     // Parse tile from path parameters
-    let tile = match tile::Tile::from(
+    let tile = match tile::Tile::new(
         ctx.param("z").unwrap_or(&String::from("")),
         ctx.param("x").unwrap_or(&String::from("")),
         ctx.param("y").unwrap_or(&String::from("")),
@@ -51,8 +51,8 @@ pub async fn get_tile(req: cf::Request, ctx: cf::RouteContext<()>) -> cf::Result
         src: src.to_string(),
     };
     // Fetch COG header
-    let header = match cog.fetch_header().await {
-        Ok(cog) => cog,
+    let cog_header = match cog.fetch_header().await {
+        Ok(body) => body,
         Err(e) => return cf::Response::error(format!("Failed to fetch COG: {}", e), 500),
     };
 
@@ -64,5 +64,5 @@ pub async fn get_tile(req: cf::Request, ctx: cf::RouteContext<()>) -> cf::Result
         .with_header("x-debug-src", &cog.src)?
         .with_header("x-debug-bounds", &format!("{:?}", bounds))?
         .with_header("x-debug-tile", &format!("{:?}", tile))?
-        .ok(header)
+        .ok(cog_header)
 }
