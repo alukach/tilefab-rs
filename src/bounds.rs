@@ -10,7 +10,7 @@ pub struct Bounds {
     y_max: f64,
 }
 impl Bounds {
-    pub fn from(tile: Tile) -> Self {
+    pub fn from(tile: &Tile) -> Self {
         let n = 2.0_f64.powi(tile.z as i32);
 
         let x_min = tile.x as f64 / n * 360.0 - 180.0;

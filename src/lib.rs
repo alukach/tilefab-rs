@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use worker as cf;
 pub mod bounds;
 pub mod tile;
@@ -23,7 +24,8 @@ pub async fn hello(_: cf::Request, _ctx: cf::RouteContext<()>) -> cf::Result<cf:
     })
 }
 
-pub async fn get_tile(_: cf::Request, ctx: cf::RouteContext<()>) -> cf::Result<cf::Response> {
+pub async fn get_tile(req: cf::Request, ctx: cf::RouteContext<()>) -> cf::Result<cf::Response> {
+    // Parse tile from path parameters
     let tile = match tile::Tile::from(
         ctx.param("z").unwrap_or(&String::from("")),
         ctx.param("x").unwrap_or(&String::from("")),
@@ -33,6 +35,15 @@ pub async fn get_tile(_: cf::Request, ctx: cf::RouteContext<()>) -> cf::Result<c
         Err(e) => return cf::Response::error(format!("Invalid tile path: {}", e), 400),
     };
 
-    // do lots of other things with tile...
-    cf::Response::from_json(&bounds::Bounds::from(tile))
+    // Retrieve src query parameter
+    let q: HashMap<_, _> = req.url().unwrap().query_pairs().into_owned().collect();
+    let src = match q.get("src") {
+        Some(src) => src,
+        None => return cf::Response::error("src query parameter is required", 400),
+    };
+
+    // Generate lat/lng bounds
+    let bounds = bounds::Bounds::from(&tile);
+
+    cf::Response::ok(format!("{:?}\n{:?}\nSource {}", tile, bounds, src))
 }
