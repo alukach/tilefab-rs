@@ -1,0 +1,17 @@
+[package]
+edition = "2021"
+name = "tilefab-rs"
+version = "0.1.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+serde = "1.0.203"
+worker = "0.3.0"
+
+[profile.release]
+codegen-units = 1 
+lto = true 
+opt-level = "s" # optimize for size in release builds
+strip = true
