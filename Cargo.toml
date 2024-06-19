@@ -8,6 +8,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 byteorder = "1.5.0"
+bytes = "1.6.0"
+geotiff = { version = "0.0.1", path = "../geotiff" }
 reqwest = "0.12.5"
 serde = "1.0.203"
 worker = "0.3.0"

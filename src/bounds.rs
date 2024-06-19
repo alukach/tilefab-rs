@@ -10,6 +10,7 @@ pub struct Bounds {
     y_max: f64,
 }
 impl Bounds {
+  // Consider using utile to do this instead, https://github.com/jessekrubin/utiles
     pub fn from(tile: &Tile) -> Self {
         let n = 2.0_f64.powi(tile.z as i32);
 
