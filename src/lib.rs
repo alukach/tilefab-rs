@@ -50,19 +50,32 @@ pub async fn get_tile(req: cf::Request, ctx: cf::RouteContext<()>) -> cf::Result
     let cog = cog::COG {
         src: src.to_string(),
     };
+    
     // Fetch COG header
     let cog_header = match cog.fetch_header().await {
         Ok(body) => body,
-        Err(e) => return cf::Response::error(format!("Failed to fetch COG: {}", e), 500),
+        Err(e) => return cf::Response::error(format!("Failed to fetch COG: {}", e), 503),
     };
+    
+    // Read TIFF header
+    let tiff_header = cog::tiff_header::TiffHeader::new(&cog_header);
 
     // Generate lat/lng bounds
     let bounds = bounds::Bounds::from(&tile);
+
+    // After parsing header, I should be able to construct range requests to the IFDs of
+    // choosing based on bounding box.
+
+    // After fetch IFDs, trim to bounding box (how??), convert data (bytes, floats, etc, assume
+    // uint8 for now), convert to PNG (review `image` crate), return PNG.
+
+    // Assumptions:
+    // - 512x512 tiles
 
     cf::ResponseBuilder::new()
         .with_status(200)
         .with_header("x-debug-src", &cog.src)?
         .with_header("x-debug-bounds", &format!("{:?}", bounds))?
         .with_header("x-debug-tile", &format!("{:?}", tile))?
-        .ok(cog_header)
+        .ok(format!("{:?}", tiff_header))
 }

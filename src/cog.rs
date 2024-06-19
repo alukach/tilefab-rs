@@ -1,14 +1,16 @@
 use reqwest::{
     header::{HeaderMap, RANGE},
-    Error,
+    Error as ReqError,
 };
+
+pub mod tiff_header;
 
 pub struct COG {
     pub src: String,
 }
 
 impl COG {
-    pub async fn fetch_header(&self) -> Result<String, Error> {
+    pub async fn fetch_header(&self) -> Result<Vec<u8>, ReqError> {
         // Fetch tile header
         let client = reqwest::Client::new();
         let mut headers = HeaderMap::new();
@@ -17,8 +19,7 @@ impl COG {
         // Make the GET request with the headers
         let response = client.get(&self.src).headers(headers).send().await?;
 
-        // Print the status and the response body (if any)
-        println!("Status: {}", response.status());
-        response.text().await
+        // Parse header
+        Ok(response.bytes().await?.to_vec())
     }
 }
