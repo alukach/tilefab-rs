@@ -4,6 +4,7 @@ use worker as cf;
 
 pub mod bounds;
 pub mod cog;
+pub mod reader;
 pub mod tile;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -13,6 +14,7 @@ struct GenericResponse {
 
 #[cf::event(fetch)]
 async fn main(req: cf::Request, env: cf::Env, _ctx: cf::Context) -> cf::Result<cf::Response> {
+    cf::console_log!("Foo");
     cf::Router::new()
         .get_async("/", hello)
         .get_async("/:z/:x/:y", get_tile)
@@ -50,11 +52,11 @@ pub async fn get_tile(req: cf::Request, ctx: cf::RouteContext<()>) -> cf::Result
     let cog = cog::COG {
         src: src.to_string(),
     };
-    // Fetch COG header
-    let cog_header = match cog.fetch_header().await {
-        Ok(body) => body,
-        Err(e) => return cf::Response::error(format!("Failed to fetch COG: {}", e), 500),
-    };
+    // // Fetch COG header
+    // let cog_header = match cog.fetch_header().await {
+    //     Ok(body) => body,
+    //     Err(e) => return cf::Response::error(format!("Failed to fetch COG: {}", e), 500),
+    // };
 
     // Generate lat/lng bounds
     let bounds = bounds::Bounds::from(&tile);
@@ -64,5 +66,5 @@ pub async fn get_tile(req: cf::Request, ctx: cf::RouteContext<()>) -> cf::Result
         .with_header("x-debug-src", &cog.src)?
         .with_header("x-debug-bounds", &format!("{:?}", bounds))?
         .with_header("x-debug-tile", &format!("{:?}", tile))?
-        .ok(cog_header)
+        .ok("TODO")
 }

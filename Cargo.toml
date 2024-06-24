@@ -7,7 +7,10 @@ version = "0.1.0"
 crate-type = ["cdylib"]
 
 [dependencies]
-reqwest = "0.12.5"
+bytes = "1.6.0"
+futures = "0.3.30"
+pin-project = "1.1.5"
+reqwest = { version = "0.12.5" }
 serde = "1.0.203"
 worker = "0.3.0"
 
