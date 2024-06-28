@@ -86,7 +86,7 @@ Error: wasm-pack exited with status exit status: 1
 
 <li>
 
-[geotiff](https://crates.io/crates/geotiff): built around local files. no support for `async` (ie not usable in WASM)
+[`geotiff`](https://crates.io/crates/geotiff): built around local files. no support for `async` (ie not usable in WASM)
 
 </li>
 </ul>
