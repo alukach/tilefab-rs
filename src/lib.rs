@@ -1,3 +1,4 @@
+use http_range_client::BufferedHttpRangeClient;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use worker as cf;
@@ -47,14 +48,22 @@ pub async fn get_tile(req: cf::Request, ctx: cf::RouteContext<()>) -> cf::Result
         None => return cf::Response::error("src query parameter is required", 400),
     };
 
+    // Read some data
+    let mut client = BufferedHttpRangeClient::new(src);
+    client.min_req_size(4096);
+    let bytes = match client.get_range(0, 3).await {
+        Ok(bytes) => bytes,
+        Err(e) => return cf::Response::error(format!("Failed to fetch COG: {}", e), 500),
+    };
+
     let cog = cog::COG {
         src: src.to_string(),
     };
     // Fetch COG header
-    let cog_header = match cog.fetch_header().await {
-        Ok(body) => body,
-        Err(e) => return cf::Response::error(format!("Failed to fetch COG: {}", e), 500),
-    };
+    // let cog_header = match cog.fetch_header().await {
+    //     Ok(body) => body,
+    //     Err(e) => return cf::Response::error(format!("Failed to fetch COG: {}", e), 500),
+    // };
 
     // Generate lat/lng bounds
     let bounds = bounds::Bounds::from(&tile);
@@ -64,5 +73,5 @@ pub async fn get_tile(req: cf::Request, ctx: cf::RouteContext<()>) -> cf::Result
         .with_header("x-debug-src", &cog.src)?
         .with_header("x-debug-bounds", &format!("{:?}", bounds))?
         .with_header("x-debug-tile", &format!("{:?}", tile))?
-        .ok(cog_header)
+        .ok(format!("Bytes: {:?}", bytes))
 }
