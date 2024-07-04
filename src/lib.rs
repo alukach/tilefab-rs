@@ -8,6 +8,7 @@ use worker as cf;
 
 pub mod bounds;
 pub mod cog;
+pub mod errors;
 pub mod tile;
 
 #[derive(Debug, Deserialize, Serialize)]
