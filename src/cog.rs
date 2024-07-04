@@ -69,17 +69,13 @@ impl CogHeader {
 }
 
 impl Cog {
-    pub async fn new(client: BufferedHttpRangeClient) -> Result<Self, CogErr> {
-        let header = Self::fetch_header(client).await?;
-        cf::console_log!("Header: {:?}", header);
-        Ok(Self { header })
-    }
-
-    pub async fn fetch_header(mut client: BufferedHttpRangeClient) -> Result<CogHeader, CogErr> {
+    pub async fn new(client: &mut BufferedHttpRangeClient) -> Result<Self, CogErr> {
         // Header is in the first 8 bytes
         let buf = client.get_range(0, 8).await?;
-        cf::console_log!("Fetched {:?} bytes for the header", buf.len());
-        CogHeader::new(&buf)
+        let header = CogHeader::new(&buf)?;
+        cf::console_log!("Header: {:?}", header);
+       
+        Ok(Self { header })
     }
 }
 

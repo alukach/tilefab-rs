@@ -50,10 +50,10 @@ pub async fn get_tile(req: cf::Request, ctx: cf::RouteContext<()>) -> cf::Result
     };
 
     // TODO: Mv away from buffered client in favor of std client
-    let client = BufferedHttpRangeClient::new(src);
+    let mut client = BufferedHttpRangeClient::new(src);
     // client.min_req_size(1024);
 
-    let cog = match cog::Cog::new(client).await {
+    let cog = match cog::Cog::new(&mut client).await {
         Ok(cog) => cog,
         Err(e) => return cf::Response::error(format!("{}", e), 500),
     };
