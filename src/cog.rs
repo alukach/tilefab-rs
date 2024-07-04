@@ -17,7 +17,7 @@ pub struct CogHeader {
 
 impl CogHeader {
     pub fn new(buf: &[u8]) -> Result<Self, CogErr> {
-        if !(buf.len() >= 8) {
+        if buf.len() < 8 {
             return Err(CogErr::Io(std::io::Error::new(
                 ErrorKind::InvalidData,
                 "Invalid header length",
