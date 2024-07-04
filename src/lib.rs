@@ -1,10 +1,18 @@
-use http_range_client::BufferedHttpRangeClient;
+use byteorder::{BigEndian, ByteOrder, LittleEndian};
+use byteorder_async::ReaderToByteOrder;
+use http_range_client::{AsyncBufferedHttpRangeClient, AsyncHttpRangeClient};
+use num::FromPrimitive;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use worker as cf;
 
+#[macro_use]
+extern crate enum_primitive;
+
 pub mod bounds;
 pub mod cog;
+pub mod geotiff;
+pub mod reader;
 pub mod tile;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -49,11 +57,26 @@ pub async fn get_tile(req: cf::Request, ctx: cf::RouteContext<()>) -> cf::Result
     };
 
     // Read some data
-    let mut client = BufferedHttpRangeClient::new(src);
-    client.min_req_size(4096);
-    let bytes = match client.get_range(0, 3).await {
+    let mut reader = AsyncBufferedHttpRangeClient::new(src);
+    reader.min_req_size(4096);
+
+    // match TIFFByteOrder::from_u16(reader.byte_order().read_u16::<LittleEndian>()?) {
+    //     Some(TIFFByteOrder::LittleEndian) => Ok(TIFFByteOrder::LittleEndian),
+    //     Some(TIFFByteOrder::BigEndian) => Ok(TIFFByteOrder::BigEndian),
+    //     None => Err(Error::new(
+    //         ErrorKind::Other,
+    //         format!("Invalid byte order in header."),
+    //     )),
+    // }
+
+    // let bytes = match reader.get_bytes(15).await {
+    //     Ok(bytes) => bytes,
+    //     Err(e) => return cf::Response::error(format!("Failed to read COG: {}", e), 500),
+    // };
+
+    let bytes = match reader.get_range(0, 15).await {
         Ok(bytes) => bytes,
-        Err(e) => return cf::Response::error(format!("Failed to fetch COG: {}", e), 500),
+        Err(e) => return cf::Response::error(format!("Failed to read COG: {}", e), 500),
     };
 
     let cog = cog::COG {

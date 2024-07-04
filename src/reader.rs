@@ -1,50 +1,53 @@
-use futures::io::AsyncRead;
+use futures::io::{AsyncRead, AsyncSeek};
 use futures::task::Poll;
-use futures::{pin_mut, Future, FutureExt, TryFutureExt};
+use futures::{future, FutureExt, TryFutureExt};
 use http_range_client::{BufferedHttpRangeClient, HttpError};
 use std::pin::{pin, Pin};
 
 #[pin_project::pin_project]
 pub struct Reader {
     pub client: BufferedHttpRangeClient,
-    pub min_request_size: usize,
-    pub min_request_size_factor: usize,
-    pub min_request_size_max: usize,
     #[pin]
-    fut: Option<Box<dyn Future<Output = Result<Vec<u8>, HttpError>>>>,
+    future: Option<future::BoxFuture<'static, Result<Vec<u8>, HttpError>>>,
+}
+
+impl AsyncRead for Reader {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut futures::task::Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<Result<usize, futures::io::Error>> {
+        let mut this = self.project();
+        if this.future.is_none() {
+            this.future.set(Some(
+                this.client
+                    .get_bytes(buf.len())
+                    .map_ok(|res| res.to_vec())
+                    .boxed::<'static>()
+            ));
+        }
+
+        match this.future.unwrap().as_mut().poll(cx) {
+            Poll::Ready(Ok(bytes)) => {
+                let len = bytes.len();
+                buf[..len].copy_from_slice(&bytes);
+                Poll::Ready(Ok(len))
+            }
+            Poll::Ready(Err(e)) => Poll::Ready(Err(futures::io::Error::new(
+                futures::io::ErrorKind::Other,
+                e.to_string(),
+            ))),
+            Poll::Pending => Poll::Pending,
+        }
+    }
 }
 
 impl Reader {
     pub fn new(url: &String) -> Self {
         Reader {
             client: BufferedHttpRangeClient::new(&url),
-            min_request_size: 4096,
-            min_request_size_factor: 2,
-            min_request_size_max: 4096 * 1024,
-            fut: None,
+            future: None,
         }
-    }
-}
-
-impl AsyncRead for Reader {
-    fn poll_read(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut futures::task::Context<'_>,
-        buf: &mut [u8],
-    ) -> futures::task::Poll<Result<usize, futures::io::Error>> {
-        let this = self.project();
-
-        // TODO: Consider incrementing page side after each read
-        // this.client.set_min_req_size(
-        //     (this.min_request_size * this.min_request_size_factor).min(this.min_request_size_max),
-        // );
-
-        if this.fut.is_none() {
-            let operation = this.client.get_bytes(buf.len()).map_ok(|res| res.to_vec());
-            this.fut = pin!(Some(Box::new(operation)));
-        }
-
-        this.fut.as_ref().expect("msg").as_mut().poll(cx)
     }
 }
 
