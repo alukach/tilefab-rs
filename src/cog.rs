@@ -18,7 +18,7 @@ pub struct CogHeader {
 impl CogHeader {
     pub fn new(buf: &[u8]) -> Result<Self, CogErr> {
         if !(buf.len() >= 8) {
-            return Err(CogErr::IoError(std::io::Error::new(
+            return Err(CogErr::Io(std::io::Error::new(
                 ErrorKind::InvalidData,
                 "Invalid header length",
             )));
@@ -32,14 +32,14 @@ impl CogHeader {
 
         // Parse header based on byte order
         match &byteorder {
-            // b"II" => Ok(CogHeader::parse::<LittleEndian>(
-            //     &mut reader,
-            //     TIFFByteOrder::LittleEndian,
-            // )?),
-            // b"MM" => Ok(CogHeader::parse::<BigEndian>(
-            //     &mut reader,
-            //     TIFFByteOrder::BigEndian,
-            // )?),
+            b"II" => Ok(CogHeader::parse::<LittleEndian>(
+                &mut reader,
+                TIFFByteOrder::LittleEndian,
+            )?),
+            b"MM" => Ok(CogHeader::parse::<BigEndian>(
+                &mut reader,
+                TIFFByteOrder::BigEndian,
+            )?),
             _ => Err(CogErr::from(Error::new(
                 ErrorKind::InvalidData,
                 "Invalid TIFF byte order",
@@ -53,7 +53,7 @@ impl CogHeader {
     ) -> Result<Self, CogErr> {
         let magic = reader.read_u16::<T>()?;
         if magic != 42 {
-            return Err(CogErr::IoError(std::io::Error::new(
+            return Err(CogErr::Io(std::io::Error::new(
                 ErrorKind::InvalidData,
                 "Invalid TIFF magic number",
             )));

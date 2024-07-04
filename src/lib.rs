@@ -55,7 +55,7 @@ pub async fn get_tile(req: cf::Request, ctx: cf::RouteContext<()>) -> cf::Result
 
     let cog = match cog::Cog::new(client).await {
         Ok(cog) => cog,
-        Err(e) => return cf::Response::error(format!("Failed to fetch COG: {}", e), 500),
+        Err(e) => return cf::Response::error(format!("{}", e), 500),
     };
 
     // Generate lat/lng bounds

@@ -1,25 +1,30 @@
+#[derive(Debug)]
+
 pub enum CogErr {
-    HttpError(http_range_client::HttpError),
-    IoError(std::io::Error),
+    Http(http_range_client::HttpError),
+    Io(std::io::Error),
 }
 
 impl From<std::io::Error> for CogErr {
     fn from(e: std::io::Error) -> Self {
-        Self::IoError(e)
+        Self::Io(e)
     }
 }
 
 impl From<http_range_client::HttpError> for CogErr {
     fn from(e: http_range_client::HttpError) -> Self {
-        Self::HttpError(e)
+        Self::Http(e)
     }
 }
 
 impl std::fmt::Display for CogErr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // The `f` value implements the `Write` trait, which is what the
-        // write! macro is expecting. Note that this formatting ignores the
-        // various flags provided to format strings.
-        write!(f, "ERR")
+        match *self {
+            // Both underlying errors already impl `Display`, so we defer to
+            // their implementations.
+            // TODO: There must be a better way to do this
+            Self::Io(ref err) => write!(f, "{{\"err\": {{\"kind\": \"IO Error\", \"details\": \"{}\"}}", err),
+            Self::Http(ref err) => write!(f, "{{\"err\": {{\"kind\": \"HTTP Error\", \"details\": \"{}\"}}", err),
+        }
     }
 }
