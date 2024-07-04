@@ -1,9 +1,9 @@
 use crate::errors::CogErr;
 use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
-use enum_primitive::FromPrimitive;
 use http_range_client::BufferedHttpRangeClient;
 use serde::{Deserialize, Serialize};
-use std::io::{Cursor, Error, ErrorKind};
+use std::io::{Cursor, Error, ErrorKind, Read};
+use worker as cf;
 
 pub struct Cog {
     pub header: CogHeader,
@@ -16,15 +16,42 @@ pub struct CogHeader {
 }
 
 impl CogHeader {
+    pub fn new(buf: &[u8]) -> Result<Self, CogErr> {
+        if !(buf.len() >= 8) {
+            return Err(CogErr::IoError(std::io::Error::new(
+                ErrorKind::InvalidData,
+                "Invalid header length",
+            )));
+        }
+
+        let mut reader = Cursor::new(buf);
+
+        // Byte order is in the first 2 bytes
+        let mut byteorder = [0; 2];
+        reader.read_exact(&mut byteorder)?;
+
+        // Parse header based on byte order
+        match &byteorder {
+            // b"II" => Ok(CogHeader::parse::<LittleEndian>(
+            //     &mut reader,
+            //     TIFFByteOrder::LittleEndian,
+            // )?),
+            // b"MM" => Ok(CogHeader::parse::<BigEndian>(
+            //     &mut reader,
+            //     TIFFByteOrder::BigEndian,
+            // )?),
+            _ => Err(CogErr::from(Error::new(
+                ErrorKind::InvalidData,
+                "Invalid TIFF byte order",
+            ))),
+        }
+    }
+
     fn parse<T: ByteOrder>(
         reader: &mut Cursor<&[u8]>,
         byteorder: TIFFByteOrder,
     ) -> Result<Self, CogErr> {
-        let magic = match byteorder {
-            TIFFByteOrder::LittleEndian => reader.read_u16::<LittleEndian>()?,
-            TIFFByteOrder::BigEndian => reader.read_u16::<BigEndian>()?,
-        };
-
+        let magic = reader.read_u16::<T>()?;
         if magic != 42 {
             return Err(CogErr::IoError(std::io::Error::new(
                 ErrorKind::InvalidData,
@@ -44,41 +71,20 @@ impl CogHeader {
 impl Cog {
     pub async fn new(client: BufferedHttpRangeClient) -> Result<Self, CogErr> {
         let header = Self::fetch_header(client).await?;
+        cf::console_log!("Header: {:?}", header);
         Ok(Self { header })
     }
 
     pub async fn fetch_header(mut client: BufferedHttpRangeClient) -> Result<CogHeader, CogErr> {
         // Header is in the first 8 bytes
         let buf = client.get_range(0, 8).await?;
-
-        let mut reader = Cursor::new(buf);
-
-        // Byte order is in the first 2 bytes
-        let byteorder = reader.read_u16::<LittleEndian>()?;
-
-        // Based on byte order, we can parse the remaining 6 bytes
-        match TIFFByteOrder::from_u16(byteorder) {
-            Some(TIFFByteOrder::LittleEndian) => Ok(CogHeader::parse::<LittleEndian>(
-                &mut reader,
-                TIFFByteOrder::LittleEndian,
-            )?),
-            Some(TIFFByteOrder::BigEndian) => Ok(CogHeader::parse::<BigEndian>(
-                &mut reader,
-                TIFFByteOrder::BigEndian,
-            )?),
-            None => Err(CogErr::from(Error::new(
-                ErrorKind::InvalidData,
-                "Invalid TIFF byte order",
-            ))),
-        }
+        cf::console_log!("Fetched {:?} bytes for the header", buf.len());
+        CogHeader::new(&buf)
     }
 }
 
-enum_from_primitive! {
-    #[repr(u16)]
-    #[derive(Debug, Deserialize, Serialize)]
-    enum TIFFByteOrder {
-        LittleEndian = 0x4949,
-        BigEndian    = 0x4d4d,
-    }
+#[derive(Debug, Deserialize, Serialize)]
+enum TIFFByteOrder {
+    LittleEndian,
+    BigEndian,
 }

@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate enum_primitive;
-
 use http_range_client::BufferedHttpRangeClient;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
