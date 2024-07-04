@@ -7,8 +7,9 @@ version = "0.1.0"
 crate-type = ["cdylib"]
 
 [dependencies]
-http-range-client = {version = "0.7.2", default-features = false, features = ["reqwest-async"]}
-reqwest = "0.12.5"
+byteorder = "1.5.0"
+enum_primitive = "0.1.1"
+http-range-client = { version = "0.7.2", default-features = false, features = ["reqwest-async"] }
 serde = "1.0.203"
 worker = "0.3.0"
 

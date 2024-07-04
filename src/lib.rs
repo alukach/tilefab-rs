@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate enum_primitive;
+
 use http_range_client::BufferedHttpRangeClient;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -48,30 +51,22 @@ pub async fn get_tile(req: cf::Request, ctx: cf::RouteContext<()>) -> cf::Result
         None => return cf::Response::error("src query parameter is required", 400),
     };
 
-    // Read some data
-    let mut client = BufferedHttpRangeClient::new(src);
-    client.min_req_size(4096);
-    let bytes = match client.get_range(0, 3).await {
-        Ok(bytes) => bytes,
+    // TODO: Mv away from buffered client in favor of std client
+    let client = BufferedHttpRangeClient::new(src);
+    // client.min_req_size(1024);
+
+    let cog = match cog::Cog::new(client).await {
+        Ok(cog) => cog,
         Err(e) => return cf::Response::error(format!("Failed to fetch COG: {}", e), 500),
     };
-
-    let cog = cog::COG {
-        src: src.to_string(),
-    };
-    // Fetch COG header
-    // let cog_header = match cog.fetch_header().await {
-    //     Ok(body) => body,
-    //     Err(e) => return cf::Response::error(format!("Failed to fetch COG: {}", e), 500),
-    // };
 
     // Generate lat/lng bounds
     let bounds = bounds::Bounds::from(&tile);
 
     cf::ResponseBuilder::new()
         .with_status(200)
-        .with_header("x-debug-src", &cog.src)?
+        .with_header("x-debug-src", src)?
         .with_header("x-debug-bounds", &format!("{:?}", bounds))?
         .with_header("x-debug-tile", &format!("{:?}", tile))?
-        .ok(format!("Bytes: {:?}", bytes))
+        .ok(format!("{:?}", cog.header))
 }
