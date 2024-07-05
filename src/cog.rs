@@ -120,7 +120,7 @@ impl IFD {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-struct IFDEntry {
+pub struct IFDEntry {
     tag: u16,
     field_type: u16,
     num_values: u32,
