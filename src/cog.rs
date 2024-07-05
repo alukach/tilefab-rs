@@ -16,6 +16,40 @@ impl Cog {
         let header = CogHeader::new(buf)?;
         cf::console_log!("Header: {:?}", header);
 
+        // Parse IFDs
+        let mut offset = (header.ifd_offset) as usize;
+        let ifds: Vec<Ifd> = vec![];
+        loop {
+            // 2-byte count of the number of directory entries (i.e. the number of fields)
+            let mut field_count_reader = client.get_range(offset, 2).await?;
+            let field_count = match header.byteorder {
+                TIFFByteOrder::LittleEndian => field_count_reader
+                    .read_u16::<LittleEndian>()
+                    .expect("slice with incorrect length"),
+                TIFFByteOrder::BigEndian => field_count_reader
+                    .read_u16::<BigEndian>()
+                    .expect("slice with incorrect length"),
+            };
+            cf::console_log!("Num fields: {:?}", field_count);
+
+            let fields_bytes = client
+                .get_range(offset + 2, ((field_count * 12) + 4) as usize)
+                .await?;
+
+            // a sequence of 12-byte field entries
+            let mut tags: Vec<IfdTag> = vec![];
+            for _ in 0..field_count {
+                let tag = match header.byteorder {
+                    TIFFByteOrder::LittleEndian => IfdTag::parse::<LittleEndian>(fields_bytes)?,
+                    TIFFByteOrder::BigEndian => IfdTag::parse::<BigEndian>(fields_bytes)?,
+                };
+                tags.push(tag);
+            }
+
+            // a 4-byte offset of the next IFD (or 0 if none)
+            break;
+        }
+
         Ok(Self { header })
     }
 }
@@ -67,6 +101,32 @@ impl CogHeader {
             byteorder,
             ifd_offset,
         })
+    }
+}
+
+#[derive(Debug)]
+struct Ifd {}
+
+#[derive(Debug)]
+struct IfdTag {}
+
+impl IfdTag {
+    fn parse<T: ByteOrder>(mut reader: impl Read) -> Result<Self, Error> {
+        let tag = reader.read_u16::<T>()?;
+        // 2-byte field type
+        let field_type = reader.read_u16::<T>()?;
+        // 4-byte count of the number of values
+        let num_values = reader.read_u32::<T>()?;
+        // 4-byte value offset
+        let value_offset = reader.read_u32::<T>()?;
+        cf::console_log!(
+            "Tag: {:?}, Type: {:?}, Num values: {:?}, Value offset: {:?}",
+            tag,
+            field_type,
+            num_values,
+            value_offset
+        );
+        Ok(Self {})
     }
 }
 
