@@ -9,6 +9,17 @@ pub struct Cog {
     pub header: CogHeader,
 }
 
+impl Cog {
+    pub async fn new(client: &mut BufferedHttpRangeClient) -> Result<Self, CogErr> {
+        // Header is in the first 8 bytes
+        let buf = client.get_range(0, 8).await?;
+        let header = CogHeader::new(buf)?;
+        cf::console_log!("Header: {:?}", header);
+
+        Ok(Self { header })
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CogHeader {
     byteorder: TIFFByteOrder,
@@ -16,16 +27,7 @@ pub struct CogHeader {
 }
 
 impl CogHeader {
-    pub fn new(buf: &[u8]) -> Result<Self, CogErr> {
-        if buf.len() < 8 {
-            return Err(CogErr::Io(std::io::Error::new(
-                ErrorKind::InvalidData,
-                "Invalid header length",
-            )));
-        }
-
-        let mut reader = Cursor::new(buf);
-
+    pub fn new(mut reader: impl Read) -> Result<Self, CogErr> {
         // Byte order is in the first 2 bytes
         let mut byteorder = [0; 2];
         reader.read_exact(&mut byteorder)?;
@@ -48,7 +50,7 @@ impl CogHeader {
     }
 
     fn parse<T: ByteOrder>(
-        reader: &mut Cursor<&[u8]>,
+        reader: &mut impl Read,
         byteorder: TIFFByteOrder,
     ) -> Result<Self, CogErr> {
         let magic = reader.read_u16::<T>()?;
@@ -65,17 +67,6 @@ impl CogHeader {
             byteorder,
             ifd_offset,
         })
-    }
-}
-
-impl Cog {
-    pub async fn new(client: &mut BufferedHttpRangeClient) -> Result<Self, CogErr> {
-        // Header is in the first 8 bytes
-        let buf = client.get_range(0, 8).await?;
-        let header = CogHeader::new(&buf)?;
-        cf::console_log!("Header: {:?}", header);
-       
-        Ok(Self { header })
     }
 }
 
