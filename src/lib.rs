@@ -17,6 +17,7 @@ struct GenericResponse {
 async fn main(req: cf::Request, env: cf::Env, _ctx: cf::Context) -> cf::Result<cf::Response> {
     cf::Router::new()
         .get_async("/", hello)
+        .get_async("/head", head)
         .get_async("/:z/:x/:y", get_tile)
         .run(req, env)
         .await
@@ -26,6 +27,31 @@ pub async fn hello(_: cf::Request, _ctx: cf::RouteContext<()>) -> cf::Result<cf:
     cf::Response::from_json(&GenericResponse {
         message: "Just another tile server.".to_string(),
     })
+}
+
+/**
+ * Helper to retrieve COG header and IFDs
+ */
+pub async fn head(req: cf::Request, _ctx: cf::RouteContext<()>) -> cf::Result<cf::Response> {
+    // Retrieve src query parameter
+    let query_params: HashMap<String, String> = match req.url() {
+        Ok(url) => url.query_pairs().into_owned().collect(),
+        Err(_) => return cf::Response::error("Failed to parse URL", 400),
+    };
+    let src = match query_params.get("src") {
+        Some(src) => src,
+        None => return cf::Response::error("src query parameter is required", 400),
+    };
+
+    let mut client = BufferedHttpRangeClient::new(src);
+    let cog = match cog::Cog::new(&mut client).await {
+        Ok(cog) => cog,
+        Err(e) => return cf::Response::error(format!("{}", e), 500),
+    };
+
+    let mut headers = cf::Headers::new();
+    headers.append("x-debug-src", src)?;
+    Ok(cf::Response::from_json(&cog)?.with_headers(headers))
 }
 
 pub async fn get_tile(req: cf::Request, ctx: cf::RouteContext<()>) -> cf::Result<cf::Response> {
@@ -52,8 +78,7 @@ pub async fn get_tile(req: cf::Request, ctx: cf::RouteContext<()>) -> cf::Result
     // TODO: Mv away from buffered client in favor of std client
     let mut client = BufferedHttpRangeClient::new(src);
     // client.min_req_size(1024);
-
-    let cog = match cog::Cog::new(&mut client).await {
+    let _cog: cog::Cog = match cog::Cog::new(&mut client).await {
         Ok(cog) => cog,
         Err(e) => return cf::Response::error(format!("{}", e), 500),
     };
@@ -66,5 +91,5 @@ pub async fn get_tile(req: cf::Request, ctx: cf::RouteContext<()>) -> cf::Result
         .with_header("x-debug-src", src)?
         .with_header("x-debug-bounds", &format!("{:?}", bounds))?
         .with_header("x-debug-tile", &format!("{:?}", tile))?
-        .ok(format!("{:?}", cog.header))
+        .ok("TODO: Implement tile generation")
 }
