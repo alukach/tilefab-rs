@@ -38,9 +38,8 @@ pub async fn head(req: cf::Request, _ctx: cf::RouteContext<()>) -> cf::Result<cf
         Ok(url) => url.query_pairs().into_owned().collect(),
         Err(_) => return cf::Response::error("Failed to parse URL", 400),
     };
-    let src = match query_params.get("src") {
-        Some(src) => src,
-        None => return cf::Response::error("src query parameter is required", 400),
+    let Some(src) = query_params.get("src") else {
+        return cf::Response::error("src query parameter is required", 400);
     };
 
     let mut client = BufferedHttpRangeClient::new(src);
@@ -49,9 +48,9 @@ pub async fn head(req: cf::Request, _ctx: cf::RouteContext<()>) -> cf::Result<cf
         Err(e) => return cf::Response::error(format!("{}", e), 500),
     };
 
-    let mut headers = cf::Headers::new();
-    headers.append("x-debug-src", src)?;
-    Ok(cf::Response::from_json(&cog)?.with_headers(headers))
+    let mut res = cf::Response::from_json(&cog)?;
+    res.headers_mut().append("x-debug-src", src)?;
+    Ok(res)
 }
 
 pub async fn get_tile(req: cf::Request, ctx: cf::RouteContext<()>) -> cf::Result<cf::Response> {
