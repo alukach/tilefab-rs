@@ -27,10 +27,9 @@ impl Cog {
                 TIFFByteOrder::LittleEndian => IFD::parse::<LittleEndian>(client, offset).await?,
                 TIFFByteOrder::BigEndian => IFD::parse::<BigEndian>(client, offset).await?,
             };
-            // 2-byte count of the number of directory entries (i.e. the number of fields)
             ifds.push(ifd);
-
-            // a 4-byte offset of the next IFD (or 0 if none)
+            
+            // TODO: Fetch remaining IFDs...
             break;
         }
 
