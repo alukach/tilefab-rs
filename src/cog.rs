@@ -2,11 +2,13 @@ use crate::errors::CogErr;
 use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
 use http_range_client::BufferedHttpRangeClient;
 use serde::{Deserialize, Serialize};
-use std::io::{Cursor, Error, ErrorKind, Read};
+use std::io::{Error, ErrorKind, Read};
 use worker as cf;
 
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Cog {
     pub header: CogHeader,
+    pub ifds: Vec<IFD>,
 }
 
 impl Cog {
@@ -17,40 +19,22 @@ impl Cog {
         cf::console_log!("Header: {:?}", header);
 
         // Parse IFDs
-        let mut offset = (header.ifd_offset) as usize;
-        let ifds: Vec<Ifd> = vec![];
+        let offset = header.ifd_offset as usize;
+        let mut ifds: Vec<IFD> = vec![];
+
         loop {
-            // 2-byte count of the number of directory entries (i.e. the number of fields)
-            let mut field_count_reader = client.get_range(offset, 2).await?;
-            let field_count = match header.byteorder {
-                TIFFByteOrder::LittleEndian => field_count_reader
-                    .read_u16::<LittleEndian>()
-                    .expect("slice with incorrect length"),
-                TIFFByteOrder::BigEndian => field_count_reader
-                    .read_u16::<BigEndian>()
-                    .expect("slice with incorrect length"),
+            let ifd = match header.byteorder {
+                TIFFByteOrder::LittleEndian => IFD::parse::<LittleEndian>(client, offset).await?,
+                TIFFByteOrder::BigEndian => IFD::parse::<BigEndian>(client, offset).await?,
             };
-            cf::console_log!("Num fields: {:?}", field_count);
-
-            let fields_bytes = client
-                .get_range(offset + 2, ((field_count * 12) + 4) as usize)
-                .await?;
-
-            // a sequence of 12-byte field entries
-            let mut tags: Vec<IfdTag> = vec![];
-            for _ in 0..field_count {
-                let tag = match header.byteorder {
-                    TIFFByteOrder::LittleEndian => IfdTag::parse::<LittleEndian>(fields_bytes)?,
-                    TIFFByteOrder::BigEndian => IfdTag::parse::<BigEndian>(fields_bytes)?,
-                };
-                tags.push(tag);
-            }
+            // 2-byte count of the number of directory entries (i.e. the number of fields)
+            ifds.push(ifd);
 
             // a 4-byte offset of the next IFD (or 0 if none)
             break;
         }
 
-        Ok(Self { header })
+        Ok(Self { header, ifds })
     }
 }
 
@@ -104,13 +88,46 @@ impl CogHeader {
     }
 }
 
-#[derive(Debug)]
-struct Ifd {}
+#[derive(Debug, Deserialize, Serialize)]
+pub struct IFD {
+    pub count: u16,
+    pub entries: Vec<IFDEntry>,
+}
 
-#[derive(Debug)]
-struct IfdTag {}
+impl IFD {
+    async fn parse<T: ByteOrder>(
+        client: &mut BufferedHttpRangeClient,
+        offset: usize,
+    ) -> Result<Self, CogErr> {
+        let mut entry_count_reader = client.get_range(offset, 2).await?;
+        let entry_count = entry_count_reader
+            .read_u16::<T>()
+            .expect("slice with incorrect length");
+        cf::console_log!("Num fields: {:?}", entry_count);
 
-impl IfdTag {
+        let fields_bytes = client
+            .get_range(offset + 2, ((entry_count * 12) + 4) as usize)
+            .await?;
+
+        // a sequence of 12-byte field entries
+        let mut entries: Vec<IFDEntry> = vec![];
+        for _ in 0..entry_count {
+            let ifd_entry = IFDEntry::parse::<T>(fields_bytes)?;
+            entries.push(ifd_entry);
+        }
+        Ok(Self { count: 0, entries })
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct IFDEntry {
+    tag: u16,
+    field_type: u16,
+    num_values: u32,
+    value_offset: u32,
+}
+
+impl IFDEntry {
     fn parse<T: ByteOrder>(mut reader: impl Read) -> Result<Self, Error> {
         let tag = reader.read_u16::<T>()?;
         // 2-byte field type
@@ -119,14 +136,12 @@ impl IfdTag {
         let num_values = reader.read_u32::<T>()?;
         // 4-byte value offset
         let value_offset = reader.read_u32::<T>()?;
-        cf::console_log!(
-            "Tag: {:?}, Type: {:?}, Num values: {:?}, Value offset: {:?}",
+        Ok(Self {
             tag,
             field_type,
             num_values,
-            value_offset
-        );
-        Ok(Self {})
+            value_offset,
+        })
     }
 }
 
