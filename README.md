@@ -1,5 +1,8 @@
 # A WASM-friendly COG tile server
 
+> [!CAUTION]  
+> This project serves a workbench for me as I learn Rust. Set expectations accordingly.
+
 ## Development
 
 ### Why not use `{X}`?
