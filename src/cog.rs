@@ -19,19 +19,25 @@ impl Cog {
         cf::console_log!("Header: {:?}", header);
 
         // Parse IFDs
-        let offset = header.ifd_offset as usize;
+        let mut offset = header.ifd_offset;
         let mut ifds: Vec<IFD> = vec![];
 
         loop {
-            let ifd = match header.byteorder {
-                TIFFByteOrder::LittleEndian => IFD::parse::<LittleEndian>(client, offset).await?,
-                TIFFByteOrder::BigEndian => IFD::parse::<BigEndian>(client, offset).await?,
+            let (ifd, next_ifd_offset) = match header.byteorder {
+                TIFFByteOrder::LittleEndian => {
+                    IFD::parse::<LittleEndian>(client, offset as usize).await?
+                }
+                TIFFByteOrder::BigEndian => {
+                    IFD::parse::<BigEndian>(client, offset as usize).await?
+                }
             };
-            // offset += 2 + (ifd.count as usize * 12);
             ifds.push(ifd);
-
-            // TODO: Fetch remaining IFDs...
-            break;
+            // Increment offset by 2 bytes for the entry count, and then by 12 bytes for each entry
+            if (next_ifd_offset as usize) == 0 {
+                cf::console_debug!("No more IFDs");
+                break;
+            }
+            offset = next_ifd_offset;
         }
 
         Ok(Self { header, ifds })
@@ -94,11 +100,21 @@ pub struct IFD {
     pub entries: Vec<IFDEntry>,
 }
 
+/**
+ * An IFD contains information about the image as well as pointers to the actual image data..
+ * It consists of a 2-byte count of the number of directory entries (i.e. the number of fields),
+ * followed by a sequence of 12-byte field entries, followed by a 4-byte offset of the next IFD
+ * (or 0 if none). There must be at least 1 IFD in a TIFF file and each IFD must have at least
+ * one entry.
+ */
 impl IFD {
     async fn parse<T: ByteOrder>(
         client: &mut BufferedHttpRangeClient,
         offset: usize,
-    ) -> Result<Self, CogErr> {
+    ) -> Result<(Self, u32), CogErr> {
+        cf::console_debug!("Processing IFD at offset {:?}", offset);
+
+        // a 2-byte count of the number of directory entries
         let mut entry_count_reader = client.get_range(offset, 2).await?;
         let entry_count = entry_count_reader
             .read_u16::<T>()
@@ -107,19 +123,32 @@ impl IFD {
 
         // a sequence of 12-byte field entries
         let mut entries: Vec<IFDEntry> = Vec::with_capacity(entry_count as usize);
-
         for entry_num in 0..entry_count as usize {
             let fields_bytes = client
-                // Take our offset, add 2 bytes for the entry count, and then add 12 bytes for each entry we've processed so far
+                // Take our IFD offset, add 2 bytes for the entry count, and then add 12 bytes for each entry we've processed so far
                 .get_range(offset + 2 + (entry_num * 12), 12 as usize)
                 .await?;
+
             let ifd_entry = IFDEntry::parse::<T>(fields_bytes)?;
+
             entries.push(ifd_entry);
         }
-        Ok(Self {
-            count: entry_count,
-            entries,
-        })
+
+        // a 4-byte offset of the next IFD (or 0 if none)
+        let mut next_ifd_offset_reader = client
+            .get_range(offset + 2 + (entry_count as usize * 12), 4)
+            .await?;
+        let next_ifd_offset = next_ifd_offset_reader
+            .read_u32::<T>()
+            .expect("slice with incorrect length");
+
+        Ok((
+            Self {
+                count: entry_count,
+                entries,
+            },
+            next_ifd_offset,
+        ))
     }
 }
 
@@ -131,8 +160,26 @@ pub struct IFDEntry {
     value_offset: u32,
 }
 
+/**
+ * Each 12-byte IFD Entry is in the following format.
+ *
+ * Bytes  | Description
+ * ---------------------
+ * 0-1	  | The Tag that identifies the field
+ * 2-3	  | The field type
+ * 4-7	  | Count of the indicated type
+ * 8-11	  | The Value Offset, the file offset (in bytes) of the Value for the field. The Value is
+ *        | expected to begin on a word boundary; the correspond-ing Value Offset will thus be an
+ *        | even number. This file offset may point anywhere in the file, even after the image data.
+ *
+ * A TIFF field is a logical entity consisting of TIFF tag and its value. This logical concept
+ * is implemented as an IFD Entry, plus the actual value if it doesn’t fit into the value/offset
+ * part, the last 4 bytes of the IFD Entry. The terms TIFF field and IFD entry are interchangeable
+ * in most contexts.
+ */
 impl IFDEntry {
     fn parse<T: ByteOrder>(mut reader: impl Read) -> Result<Self, Error> {
+        // TODO: Use `tiff` or `geotiff` to parse tag data
         let tag = reader.read_u16::<T>()?;
         // 2-byte field type
         let field_type = reader.read_u16::<T>()?;
