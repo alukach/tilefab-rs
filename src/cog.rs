@@ -32,7 +32,7 @@ impl Cog {
                 }
             };
             ifds.push(ifd);
-            // Increment offset by 2 bytes for the entry count, and then by 12 bytes for each entry
+
             if (next_ifd_offset as usize) == 0 {
                 cf::console_debug!("No more IFDs");
                 break;
@@ -51,6 +51,24 @@ pub struct CogHeader {
 }
 
 impl CogHeader {
+    /**
+     * The 8-byte TIFF file header contains the following information:
+     *
+     * Bytes  | Description
+     * ---------------------
+     * 0-1    | The byte order used within the file. Legal values are:“II”(4949.H)“MM” (4D4D.H).
+     *        | In the “II” format, byte order is always from the least significant byte to the
+     *        | most significant byte, for both 16-bit and 32-bit integers This is called little-endian
+     *        | byte order. In the “MM” format, byte order is always from most significant to least
+     *        | significant, for both 16-bit and 32-bit integers. This is called big-endian byte order.
+     * 2-3    | An arbitrary but carefully chosen number (42) that further identifies the file as a
+     *        | TIFF file.The byte order depends on the value of Bytes 0-1.
+     * 4-7    | The offset (in bytes) of the first IFD. The directory may be at any location in the file
+     *        | after the header but must begin on a word boundary. In particular, an Image File Directory
+     *        | may follow the image data it describes. Readers must follow the pointers wherever they
+     *        | may lead. The term byte offset is always used in this document to refer to a location with
+     *        | respect to the beginning of the TIFF file. The first byte of the file has an offset of 0.
+     */
     pub fn new(mut reader: impl Read) -> Result<Self, CogErr> {
         // Byte order is in the first 2 bytes
         let mut byteorder = [0; 2];
@@ -100,14 +118,14 @@ pub struct IFD {
     pub entries: Vec<IFDEntry>,
 }
 
-/**
- * An IFD contains information about the image as well as pointers to the actual image data..
- * It consists of a 2-byte count of the number of directory entries (i.e. the number of fields),
- * followed by a sequence of 12-byte field entries, followed by a 4-byte offset of the next IFD
- * (or 0 if none). There must be at least 1 IFD in a TIFF file and each IFD must have at least
- * one entry.
- */
 impl IFD {
+    /**
+     * An IFD contains information about the image as well as pointers to the actual image data..
+     * It consists of a 2-byte count of the number of directory entries (i.e. the number of fields),
+     * followed by a sequence of 12-byte field entries, followed by a 4-byte offset of the next IFD
+     * (or 0 if none). There must be at least 1 IFD in a TIFF file and each IFD must have at least
+     * one entry.
+     */
     async fn parse<T: ByteOrder>(
         client: &mut BufferedHttpRangeClient,
         offset: usize,
@@ -160,24 +178,24 @@ pub struct IFDEntry {
     value_offset: u32,
 }
 
-/**
- * Each 12-byte IFD Entry is in the following format.
- *
- * Bytes  | Description
- * ---------------------
- * 0-1	  | The Tag that identifies the field
- * 2-3	  | The field type
- * 4-7	  | Count of the indicated type
- * 8-11	  | The Value Offset, the file offset (in bytes) of the Value for the field. The Value is
- *        | expected to begin on a word boundary; the correspond-ing Value Offset will thus be an
- *        | even number. This file offset may point anywhere in the file, even after the image data.
- *
- * A TIFF field is a logical entity consisting of TIFF tag and its value. This logical concept
- * is implemented as an IFD Entry, plus the actual value if it doesn’t fit into the value/offset
- * part, the last 4 bytes of the IFD Entry. The terms TIFF field and IFD entry are interchangeable
- * in most contexts.
- */
 impl IFDEntry {
+    /**
+     * Each 12-byte IFD Entry is in the following format.
+     *
+     * Bytes  | Description
+     * ---------------------
+     * 0-1	  | The Tag that identifies the field
+     * 2-3	  | The field type
+     * 4-7	  | Count of the indicated type
+     * 8-11	  | The Value Offset, the file offset (in bytes) of the Value for the field. The Value is
+     *        | expected to begin on a word boundary; the correspond-ing Value Offset will thus be an
+     *        | even number. This file offset may point anywhere in the file, even after the image data.
+     *
+     * A TIFF field is a logical entity consisting of TIFF tag and its value. This logical concept
+     * is implemented as an IFD Entry, plus the actual value if it doesn’t fit into the value/offset
+     * part, the last 4 bytes of the IFD Entry. The terms TIFF field and IFD entry are interchangeable
+     * in most contexts.
+     */
     fn parse<T: ByteOrder>(mut reader: impl Read) -> Result<Self, Error> {
         // TODO: Use `tiff` or `geotiff` to parse tag data
         let tag = reader.read_u16::<T>()?;
