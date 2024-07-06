@@ -27,8 +27,9 @@ impl Cog {
                 TIFFByteOrder::LittleEndian => IFD::parse::<LittleEndian>(client, offset).await?,
                 TIFFByteOrder::BigEndian => IFD::parse::<BigEndian>(client, offset).await?,
             };
+            // offset += 2 + (ifd.count as usize * 12);
             ifds.push(ifd);
-            
+
             // TODO: Fetch remaining IFDs...
             break;
         }
@@ -104,17 +105,21 @@ impl IFD {
             .expect("slice with incorrect length");
         cf::console_log!("Num fields: {:?}", entry_count);
 
-        let fields_bytes = client
-            .get_range(offset + 2, ((entry_count * 12) + 4) as usize)
-            .await?;
-
         // a sequence of 12-byte field entries
-        let mut entries: Vec<IFDEntry> = vec![];
-        for _ in 0..entry_count {
+        let mut entries: Vec<IFDEntry> = Vec::with_capacity(entry_count as usize);
+
+        for entry_num in 0..entry_count as usize {
+            let fields_bytes = client
+                // Take our offset, add 2 bytes for the entry count, and then add 12 bytes for each entry we've processed so far
+                .get_range(offset + 2 + (entry_num * 12), 12 as usize)
+                .await?;
             let ifd_entry = IFDEntry::parse::<T>(fields_bytes)?;
             entries.push(ifd_entry);
         }
-        Ok(Self { count: 0, entries })
+        Ok(Self {
+            count: entry_count,
+            entries,
+        })
     }
 }
 
