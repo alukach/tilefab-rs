@@ -1,13 +1,13 @@
 use crate::errors::CogErr;
 use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
-use geotiff::{
-    geotiff::decode_tag,
-    lowlevel::{tag_size, TIFFTag, TagValue},
-};
+use geotiff::lowlevel::{tag_size, TagValue};
 use http_range_client::BufferedHttpRangeClient;
 use serde::{Deserialize, Serialize};
-use std::io::{Error, ErrorKind, Read};
-use tiff::tags::Type;
+use std::{
+    io::{Error, ErrorKind, Read},
+    vec,
+};
+use tiff::tags::{Tag, Type};
 use worker as cf;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -172,20 +172,19 @@ impl IFD {
 
             // Bytes 0..1: u16 tag ID
             let tag_value = fields_bytes.read_u16::<T>()?;
-            let Some(tag) = decode_tag(tag_value) else {
-                // https://www.loc.gov/preservation/digital/formats/content/tiff_tags.shtml
-                cf::console_warn!(
+            let Some(tag) = Tag::from_u16(tag_value) else {
+                cf::console_debug!(
                     "#{:?}/{:?}: Ignoring entry with unexpected tag value ({:?})",
                     entry_num + 1,
                     entry_count,
                     tag_value
                 );
                 continue;
-                // TODO: Fail on bad tag type
-                // return Err(CogErr::from(Error::new(
+                // TODO: Fail on bad tag value
+                // Err(CogErr::from(Error::new(
                 //     ErrorKind::InvalidData,
                 //     format!("Invalid tag {:04X}", tag_value),
-                // )));
+                // )))
             };
 
             // Bytes 2..3: u16 field Type
@@ -199,10 +198,10 @@ impl IFD {
                 );
                 continue;
                 // TODO: Fail on bad field type
-                // return Err(CogErr::from(Error::new(
+                // Err(CogErr::from(Error::new(
                 //     ErrorKind::InvalidData,
                 //     format!("Invalid tag type {:04X}", field_type_value),
-                // )));
+                // )))
             };
             let value_size = tag_size(&field_type);
 
@@ -215,7 +214,8 @@ impl IFD {
 
             // Bytes 8..11: u32 offset in file to Value
             let value_offset = fields_bytes.read_u32::<T>()?;
-            let mut value_data: &[u8] = match tot_size <= 4 {
+            let treat_offset_as_value = tot_size <= 4;
+            let mut value_data: &[u8] = match treat_offset_as_value {
                 true => {
                     // NOTE: If the value is <= 4 bytes, the value offset is the value itself. I can't
                     // find this mentioned in the spec, but all reference implementations do this.
@@ -233,10 +233,11 @@ impl IFD {
                         .await?
                 }
             };
+
             for _ in 0..num_values as usize {
-                let mut buf = [0u8; 4];
+                let mut buf = vec![0u8; value_size as usize];
                 value_data.read(&mut buf)?;
-                let val = Self::vec_to_tag_value::<T>(buf.to_vec(), &field_type)?;
+                let val = Self::vec_to_tag_value::<T>(buf, &field_type)?;
                 values.push(val);
             }
 
@@ -321,10 +322,10 @@ enum TIFFByteOrder {
     BigEndian,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-struct Tag {
-    // tag_value: u16,
-    // field_type_value: u16,
-    // num_values: u32,
-    // value_offset: u32,
-}
+// #[derive(Debug, Deserialize, Serialize)]
+// struct Tag {
+//     // tag_value: u16,
+//     // field_type_value: u16,
+//     // num_values: u32,
+//     // value_offset: u32,
+// }
